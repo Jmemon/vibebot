@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from requests.exceptions import RequestException
 
+from supabase import create_client
+
 logger = logging.getLogger(__name__)
 
 class Tweet:
@@ -26,29 +28,27 @@ class Tweet:
 
 
 class XInteractor:
-    """Class to interact with the X (Twitter) API using OAuth 2.0."""
+    """Class to interact with the X (Twitter) API using OAuth 2.0 with Supabase for token storage."""
     
     def __init__(self, 
                  client_id: str, 
                  client_secret: Optional[str] = None,
                  redirect_uri: str = "https://localhost:8000/callback",
                  bearer_token: Optional[str] = None,
-                 access_token: Optional[str] = None,
-                 refresh_token: Optional[str] = None,
-                 token_expiry: Optional[int] = None,
+                 supabase_url: str = None,
+                 supabase_key: str = None,
                  user_id: Optional[str] = None,
                  is_confidential_client: bool = True,
                  scopes: List[str] = None):
-        """Initialize the X API interactor.
+        """Initialize the X API interactor with Supabase integration.
         
         Args:
             client_id: OAuth 2.0 client ID
             client_secret: OAuth 2.0 client secret (for confidential clients)
             redirect_uri: OAuth 2.0 redirect URI
             bearer_token: Bearer token for app-only authentication
-            access_token: OAuth 2.0 access token (if already authenticated)
-            refresh_token: OAuth 2.0 refresh token (if already authenticated)
-            token_expiry: Timestamp when the access token expires
+            supabase_url: URL of your Supabase instance
+            supabase_key: API key for your Supabase instance
             user_id: The authenticated user's ID
             is_confidential_client: Whether this is a confidential client
             scopes: List of OAuth 2.0 scopes to request
@@ -57,11 +57,24 @@ class XInteractor:
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
         self.bearer_token = bearer_token
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-        self.token_expiry = token_expiry
         self.user_id = user_id
         self.is_confidential_client = is_confidential_client
+        
+        # Initialize Supabase client if credentials are provided
+        self.supabase = None
+        if supabase_url and supabase_key:
+            try:
+                self.supabase = create_client(supabase_url, supabase_key)
+                logger.info("Supabase client initialized successfully")
+            except ImportError:
+                logger.error("Failed to import supabase. Install with: pip install supabase")
+            except Exception as e:
+                logger.error(f"Failed to initialize Supabase client: {e}")
+        
+        # Token-related attributes (will be loaded from Supabase if available)
+        self.access_token = None
+        self.refresh_token = None
+        self.token_expiry = None
         
         # Default scopes needed for the bot
         self.scopes = scopes or [
@@ -83,9 +96,72 @@ class XInteractor:
         self.code_verifier = self._generate_code_verifier()
         self.code_challenge = self.code_verifier  # Using plain method for simplicity
         
-        # Check if we need to refresh the token
-        if self.access_token and self.token_expiry and time.time() > self.token_expiry:
-            self._refresh_access_token()
+        # Load tokens from Supabase if user_id is provided
+        if self.user_id and self.supabase:
+            self._load_tokens_from_supabase()
+            
+            # Check if we need to refresh the token
+            if self.access_token and self.token_expiry and time.time() > self.token_expiry:
+                self._refresh_access_token()
+    
+    def _load_tokens_from_supabase(self) -> bool:
+        """Load OAuth tokens from Supabase.
+        
+        Returns:
+            True if tokens were loaded successfully, False otherwise
+        """
+        if not self.supabase or not self.user_id:
+            return False
+        
+        try:
+            # Query the oauth_tokens table for this user
+            response = self.supabase.table('oauth_tokens').select('*').eq('user_id', self.user_id).execute()
+            
+            if response.data and len(response.data) > 0:
+                token_data = response.data[0]
+                self.access_token = token_data.get('access_token')
+                self.refresh_token = token_data.get('refresh_token')
+                self.token_expiry = token_data.get('token_expiry')
+                logger.info(f"Loaded tokens from Supabase for user {self.user_id}")
+                return True
+            else:
+                logger.warning(f"No tokens found in Supabase for user {self.user_id}")
+                return False
+        except Exception as e:
+            logger.error(f"Error loading tokens from Supabase: {e}")
+            return False
+    
+    def _save_tokens_to_supabase(self) -> bool:
+        """Save OAuth tokens to Supabase.
+        
+        Returns:
+            True if tokens were saved successfully, False otherwise
+        """
+        if not self.supabase or not self.user_id:
+            return False
+        
+        try:
+            # Prepare token data
+            token_data = {
+                'user_id': self.user_id,
+                'access_token': self.access_token,
+                'refresh_token': self.refresh_token,
+                'token_expiry': self.token_expiry,
+                'updated_at': time.time()
+            }
+            
+            # Upsert the token data (insert if not exists, update if exists)
+            response = self.supabase.table('oauth_tokens').upsert(token_data).execute()
+            
+            if response.data:
+                logger.info(f"Saved tokens to Supabase for user {self.user_id}")
+                return True
+            else:
+                logger.error("Failed to save tokens to Supabase")
+                return False
+        except Exception as e:
+            logger.error(f"Error saving tokens to Supabase: {e}")
+            return False
     
     def _generate_code_verifier(self, length: int = 43) -> str:
         """Generate a code verifier for PKCE.
@@ -175,7 +251,11 @@ class XInteractor:
             self.token_expiry = time.time() + expires_in
             
             # Get the user ID
-            self._get_user_info()
+            user_info = self._get_user_info()
+            
+            # Save tokens to Supabase if we have a user_id and Supabase client
+            if self.user_id and self.supabase:
+                self._save_tokens_to_supabase()
             
             return True
         except RequestException as e:
@@ -223,6 +303,10 @@ class XInteractor:
             expires_in = token_data.get("expires_in", 7200)  # Default 2 hours
             self.token_expiry = time.time() + expires_in
             
+            # Save updated tokens to Supabase
+            if self.user_id and self.supabase:
+                self._save_tokens_to_supabase()
+            
             return True
         except RequestException as e:
             logger.error(f"Error refreshing access token: {e}")
@@ -267,6 +351,10 @@ class XInteractor:
                 self.access_token = None
             elif token_to_revoke == self.refresh_token:
                 self.refresh_token = None
+            
+            # Update token storage in Supabase
+            if self.user_id and self.supabase:
+                self._save_tokens_to_supabase()
             
             return True
         except RequestException as e:
