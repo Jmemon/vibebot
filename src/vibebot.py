@@ -127,6 +127,14 @@ class VibeBot:
         """Set the bot's persona."""
         self._persona = persona
     
+    def set_x_interactor(self, x_interactor: XInteractor) -> None:
+        """Set the X interactor instance.
+        
+        Args:
+            x_interactor: The XInteractor instance to use
+        """
+        self.x_interactor = x_interactor
+    
     def _generate_text(self, prompt: str, max_length: int = 100) -> str:
         """Generate text using the LLM.
         
