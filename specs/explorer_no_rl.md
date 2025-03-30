@@ -58,7 +58,7 @@ CREATE src/config.py
         ppo: PPOConfig  # the configuration for the contuous PPO training
         model: ModelConfig  # the configuration for the model
 ```
-1. Create initialization script to initialize all the databases:
+1. Create initialization script to initialize all the databases with schemas given below.
 ```aider
 CREATE scripts/init_dbs.sh:
     CREATE a psql command to create postgres dbs/bot_db.sql:
@@ -108,7 +108,15 @@ CREATE scripts/init_dbs.sh:
 CREATE dbs/readme.md:
     ADD structured description of each db with explanation for each column.
 ```
-1. Build the X interaction class.
+1. Create db connectors with psycopg2 for each database.
+```aider
+CREATE src/connectors/bot_db.py:
+    CREATE class BotDB that connects to the bot_db postgres db.
+    CREATE class EngagementDB that connects to the engagement_db postgres db.
+    CREATE class CommunityDB that connects to the community_db postgres db.
+    CREATE class QuotesCommentsDB that connects to the quotes_comments_db postgres db.
+```
+2. Build the X interaction class.
 ```aider
 CREATE src/x_interactor.py:
     CREATE class XInteractor:
@@ -148,8 +156,10 @@ CREATE src/vibebot.py:
             CREATE var config = config
             CREATE var x_interactor = instantiate XInteractor with user_id
             CREATE var persona = persona
+            Load the specified accounts into the community_db.
             Use the X interactor to follow the specified accounts.
             CREATE var llm = instantiate LLM with model config
+            instantiate the bot_db, engagement_db, community_db, and quotes_comments_db connectors.
 
         CREATE @property def persona(self) -> str:
             return self.persona
@@ -197,6 +207,11 @@ CREATE src/data/jump_start.py
         The first file should be named 0.json, the second 1.json, etc. Once you've downloaded 500Mb of data, write to a file, then start pulling down more for the next file.
 
     CREATE def jump_start_training(self, vibe_bot: VibeBot) -> None:
+        write a function to kick off lora training with the jump start dataset.
+        Use the following doc to learn how to do it.
+            https://huggingface.co/docs/peft/main/en/developer_guides/lora
+        Use q_proj, k_proj, v_proj as the LoRA layers.
+        Make sure to save the lora checkpoint in the checkpoints directory.
 ```
 1. Create a script to tune a dummy model with the RL component of the project.
 ```aider
@@ -210,16 +225,13 @@ CREATE scripts/test_ppo.py:
 ```aider
 CREATE scripts/kickoff.py:
     Initialize the bot with the given persona and handles to follow by initializing a VibeBot instance using the config.
-    From the handles to follow, pull down posts with the X API to build a spin-up dataset to train the model with SFT initially.
+    From the handles to follow, pull down posts with the X API to build a jump start dataset to train the model with SFT initially.
     Run the model through a LoRA SFT stage with the spin-up dataset. Storing lora weights in checkpoints.
     Kickoff the loops for: TL interface, engagement metrics pull-down, and PPO training.
 ```
 1. Create docker compose file.
 ```aider
 CREATE docker-compose.yml:
-    Create dbs using commands described in the the previous steps.
-    When run, it should take the persona of the bot and the list of handles to follow, and initialize the bot.
-    It should check the TL every 15 minutes and queue up replies to each one, spacing them out by a few minutes +/- some random amount for all tweets that we should respond to.
-    It should check the engagement metrics every 15 minutes and store the engagement metrics in the engagement_db and quotes_comments_db.
-    It should check how much new data is in the engagement_db and quotes_comments_db every 3 hours and run PPO on the model
+    Run the db init script.
+    Run the kickoff script using the config.
 ```
