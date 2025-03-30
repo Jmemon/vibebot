@@ -39,19 +39,24 @@ CREATE src/config.py
 
     CREATE pydantic SFTConfig(BaseModel):
         # in a real implementation, you'd have this training be fully configurable
-        approximate_tokens: int  # the approximate number of tokens to pull down from X to train on
+        approximate_tokens: int = 8_000_000_000  # the approximate number of tokens to pull down from X to train on (8B tokens is approx optimal for a 360M model based on [this paper](https://arxiv.org/pdf/2203.15556))
 
     CREATE pydantic PPOConfig(BaseModel):
         # in a real implementation, you'd have this training be fully configurable
         pass
 
-    CREATE pydantic Config(BaseModel):
+    CREATE pydantic ModelConfig(BaseModel):
+        hf_repo_id: str = HuggingFaceTB/SmolLM2-360M-Instruct
+        checkpoint_dir: str = "checkpoints"  # the directory to store/retrieve the checkpointed model
+
+    CREATE pydantic VibeBotConfig(BaseModel):
         user_id: str  # the user id of the bot's account
         accounts_to_follow: List[str]  # the handles of the accounts to follow to seed community
         persona: PersonaConfig  # the initial persona of the bot
         loop: IntervalConfig  # the intervals between loop iterations
         sft: SFTConfig  # the configuration for the initial SFT training
         ppo: PPOConfig  # the configuration for the contuous PPO training
+        model: ModelConfig  # the configuration for the model
 ```
 1. Create initialization script to initialize all the databases:
 ```aider
@@ -139,10 +144,12 @@ CREATE src/x_interactor.py:
 ```aider
 CREATE src/vibebot.py:
     CREATE class VibeBot:
-        CREATE def __init__(self, user_id: str, persona: PersonaConfig, accounts_to_follow: List[str]):
+        CREATE def __init__(self, config: VibeBotConfig):
+            CREATE var config = config
             CREATE var x_interactor = instantiate XInteractor with user_id
             CREATE var persona = persona
             Use the X interactor to follow the specified accounts.
+            CREATE var llm = instantiate LLM with model config
 
         CREATE @property def persona(self) -> str:
             return self.persona
@@ -154,10 +161,9 @@ CREATE src/vibebot.py:
             GET timeline with self.x_interactor and find tweets that are good candidates to reply to:
              - they touch on newsworthy topics
              - they introduce substantive ideas that we can add to
-            
-            Write a prompt to ask claude-3-5-haiku whether each post satisfies the criteria, 
+            Write a hard-coded prompt to ask self.llm whether each post satisfies the criteria. 
             For each one: 
-            If no: Store the post in a list of tweets that we would have ignored
+            If no: Store the post in the list of tweets that we would ignore
             If yes and reply_to_tweets is True: write a prompt that uses the post + explorer persona to generate a reply:
                 post the reply with self.x_interactor
                 If successfully posted store the reply in bot_db using given row structure
@@ -165,7 +171,7 @@ CREATE src/vibebot.py:
                 Store the post in a list of tweets that we would have responded to
 
             Return:
-             - the list of the tweets we responded to and the replies we generated
+             - the list of the tweets we responded to (or would have responded to) and the replies we generated
              - a list of the tweets we decided to ignore
 
         CREATE def get_engagement_metrics(self) -> None:
@@ -179,7 +185,19 @@ CREATE scripts/test_tl_interface.py:
     Grab the timeline, don't reply to any tweets, but print out the tweets we should respond to.
     exit.
 ```
-1. Create spin-up dataset
+1. Create a function that pulls down a dataset that we can use to jump start the vibebot's model with a LoRA SFT stage. As well as the training kickoff function.
+```aider
+CREATE src/data/jump_start.py
+    CREATE def generate_jump_start_dataset(self, vibe_bot: VibeBot) -> None:
+        Download tweets in a round robin fashion amongst accounts vibebot follows until either:
+            - you've downloaded approximately vibebot.config.sft.approximate_tokens. Use the estimation 4 characters per token.
+            - Or you've used more than 4 Gb of memory.
+        Use vibebot.x_interactor to get the tweets.
+        Store the dataset in a sequence of json files in the data/jump_start_files directory.
+        The first file should be named 0.json, the second 1.json, etc. Once you've downloaded 500Mb of data, write to a file, then start pulling down more for the next file.
+
+    CREATE def jump_start_training(self, vibe_bot: VibeBot) -> None:
+```
 1. Create a script to tune a dummy model with the RL component of the project.
 ```aider
 CREATE scripts/test_ppo.py:
@@ -192,8 +210,9 @@ CREATE scripts/test_ppo.py:
 ```aider
 CREATE scripts/kickoff.py:
     Initialize the bot with the given persona and handles to follow by initializing a VibeBot instance using the config.
-    From the handles to follow, pull down posts with the X API to build an ad_hoc kick off dataset to train the model with SFT initially.
-    Kickoff the TL check/engagement metrics check every 15 minutes loop.
+    From the handles to follow, pull down posts with the X API to build a spin-up dataset to train the model with SFT initially.
+    Run the model through a LoRA SFT stage with the spin-up dataset. Storing lora weights in checkpoints.
+    Kickoff the loops for: TL interface, engagement metrics pull-down, and PPO training.
 ```
 1. Create docker compose file.
 ```aider
