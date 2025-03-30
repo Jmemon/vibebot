@@ -27,7 +27,11 @@ class VibeBot:
         self._persona = config.persona
         
         # Initialize X interactor
-        self.x_interactor = XInteractor(config.user_id)
+        self.x_interactor = XInteractor(
+            client_id=os.environ.get("X_OAUTH2_CLIENT_ID"),
+            client_secret=os.environ.get("X_OAUTH2_CLIENT_SECRET"),
+            user_id=config.user_id
+        )
         
         # Initialize database connections
         db_config = {
