@@ -39,11 +39,11 @@ DB_NAME=${DB_NAME:-vibebot}
 
 # Create the database if it doesn't exist
 echo "Creating database $DB_NAME if it doesn't exist..."
-PG_PASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" | grep -q 1 || PG_PASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c "CREATE DATABASE $DB_NAME"
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" | grep -q 1 || PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c "CREATE DATABASE $DB_NAME"
 
 # Create bot_db table
 echo "Creating bot_db table..."
-PG_PASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS bot_db (
     post_id UUID PRIMARY KEY,
     content_gen_prompt TEXT,
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS bot_db (
 
 # Create engagement_db table
 echo "Creating engagement_db table..."
-PG_PASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS engagement_db (
     post_id UUID PRIMARY KEY,
     retrieval_time TIMESTAMP,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS engagement_db (
 
 # Create community_db table
 echo "Creating community_db table..."
-PG_PASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS community_db (
     user_id UUID PRIMARY KEY,
     handle TEXT,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS community_db (
 
 # Create quotes_comments_db table
 echo "Creating quotes_comments_db table..."
-PG_PASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS quotes_comments_db (
     post_id UUID PRIMARY KEY,
     reply_id UUID,
