@@ -25,6 +25,7 @@ class VibeBot:
         """
         self.config = config
         self._persona = config.persona
+        self.max_generation_length = 1000  # Maximum generation length in tokens
         
         # Initialize X interactor
         self.x_interactor = XInteractor(
@@ -151,7 +152,7 @@ class VibeBot:
             with torch.no_grad():
                 outputs = self.llm.generate(
                     **inputs,
-                    max_length=max_length,
+                    max_length=self.max_generation_length,
                     do_sample=True,
                     temperature=0.7,
                     top_p=0.9
