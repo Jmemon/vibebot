@@ -53,6 +53,10 @@ def engagement_loop(vibebot, interval_minutes):
 
 def ppo_loop(vibebot, interval_minutes):
     """Run the PPO training loop at specified intervals."""
+    # Wait for the first interval before starting
+    logger.info(f"PPO loop initialized. Waiting {interval_minutes} minutes before first run.")
+    time.sleep(interval_minutes * 60)
+    
     while True:
         try:
             logger.info("Starting PPO training...")
