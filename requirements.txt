@@ -1,0 +1,22 @@
+# Core dependencies
+pydantic
+torch
+transformers
+peft
+trl
+
+# Database
+psycopg2
+
+# API and HTTP
+requests
+
+# Configuration and environment
+python-dotenv
+pyyaml
+
+# Utilities
+pathlib
+typing
+uuid
+logging
