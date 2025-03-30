@@ -254,6 +254,25 @@ class XInteractor:
             logger.error(f"Error following user: {e}")
             return False
     
+    def unfollow_user(self, target_user_id: str) -> bool:
+        """Unfollow a user.
+        
+        Args:
+            target_user_id: The ID of the user to unfollow
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        url = f"{self.base_url}/users/{self.user_id}/following/{target_user_id}"
+        
+        try:
+            response = requests.delete(url, headers=self._get_headers())
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.error(f"Error unfollowing user: {e}")
+            return False
+    
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """Get user information by username.
         
