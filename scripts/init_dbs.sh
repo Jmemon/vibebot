@@ -1,15 +1,33 @@
 #!/bin/bash
 set -e
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+  echo "Loading environment variables from .env file..."
+  export $(grep -v '^#' .env | xargs)
+fi
+
 # Database connection parameters
 DB_HOST=${DB_HOST:-localhost}
 DB_PORT=${DB_PORT:-5432}
 DB_USER=${DB_USER:-postgres}
+DB_PASSWORD=${DB_PASSWORD:-postgres}
 DB_NAME=${DB_NAME:-vibebot}
+
+# Check if the user exists, if not create it
+echo "Checking if user $DB_USER exists..."
+if ! psql -h $DB_HOST -p $DB_PORT -U postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
+  echo "Creating database user $DB_USER..."
+  psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
+  psql -h $DB_HOST -p $DB_PORT -U postgres -c "ALTER USER $DB_USER CREATEDB;"
+fi
 
 # Create the database if it doesn't exist
 echo "Creating database $DB_NAME if it doesn't exist..."
-psql -h $DB_HOST -p $DB_PORT -U $DB_USER -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" | grep -q 1 || psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c "CREATE DATABASE $DB_NAME"
+if ! psql -h $DB_HOST -p $DB_PORT -U $DB_USER -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
+  echo "Creating database $DB_NAME..."
+  psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c "CREATE DATABASE $DB_NAME;"
+fi
 
 # Create bot_db table
 echo "Creating bot_db table..."
