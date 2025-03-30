@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import os
 import yaml
 import logging
@@ -6,6 +7,8 @@ import argparse
 from pathlib import Path
 import threading
 import time
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.vibebot import VibeBot
 from src.config import VibeBotConfig
