@@ -56,10 +56,10 @@ def generate_jump_start_dataset(vibebot: VibeBot) -> None:
         user_index = (user_index + 1) % len(users)
         
         try:
-            # Get timeline for user
-            timeline = vibebot.x_interactor.get_timeline(user_id=user["user_id"], max_tweets=50)
+            # Get specific posts from user's profile
+            user_posts = vibebot.x_interactor.get_user_posts(user_id=user["user_id"], max_posts=50)
             
-            for tweet in timeline:
+            for tweet in user_posts:
                 tweet_data = {
                     "id": tweet.id,
                     "author_id": tweet.author_id,
@@ -96,7 +96,7 @@ def generate_jump_start_dataset(vibebot: VibeBot) -> None:
                 if total_chars >= approximate_chars or memory_usage >= memory_limit:
                     break
             
-            logger.info(f"Downloaded {len(timeline)} tweets from user {user['handle']}")
+            logger.info(f"Downloaded {len(user_posts)} posts from user {user['handle']}")
             
             # Check if we've reached our limits
             if total_chars >= approximate_chars or memory_usage >= memory_limit:

@@ -480,6 +480,53 @@ class XInteractor:
             logger.error(f"Error getting timeline: {e}")
             return []
     
+    def get_user_posts(self, user_id: str, max_posts: int = 50) -> List[Tweet]:
+        """Get specific posts from a user's profile.
+        
+        Args:
+            user_id: The user ID to get posts for
+            max_posts: Maximum number of posts to retrieve
+            
+        Returns:
+            List of Tweet objects
+        """
+        if not user_id:
+            logger.error("No user ID provided")
+            return []
+        
+        try:
+            params = {
+                "max_results": min(max_posts, 100),  # API limit is 100
+                "tweet.fields": "created_at,referenced_tweets,author_id",
+                "exclude": "retweets,replies"  # Only get original posts
+            }
+            
+            endpoint = f"/users/{user_id}/tweets"
+            response = self._make_authenticated_request("GET", endpoint, params=params)
+            
+            if not response or response.status_code != 200:
+                logger.error(f"Failed to get user posts: {response.status_code if response else 'No response'}")
+                return []
+            
+            data = response.json()
+            tweets_data = data.get("data", [])
+            
+            tweets = []
+            for tweet_data in tweets_data:
+                tweet = Tweet(
+                    tweet_id=tweet_data.get("id"),
+                    author_id=tweet_data.get("author_id"),
+                    text=tweet_data.get("text", ""),
+                    created_at=tweet_data.get("created_at", ""),
+                    referenced_tweets=tweet_data.get("referenced_tweets", [])
+                )
+                tweets.append(tweet)
+            
+            return tweets
+        except Exception as e:
+            logger.error(f"Error getting user posts: {e}")
+            return []
+    
     def post_tweet(self, tweet: str) -> Optional[str]:
         """Post a tweet.
         
