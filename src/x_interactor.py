@@ -33,7 +33,7 @@ class XInteractor:
     def __init__(self, 
                  client_id: str, 
                  client_secret: Optional[str] = None,
-                 redirect_uri: str = "https://localhost:8000/callback",
+                 redirect_uri: str = "https://jmemon.com/index.html",
                  bearer_token: Optional[str] = None,
                  supabase_url: str = None,
                  supabase_key: str = None,
@@ -205,8 +205,8 @@ class XInteractor:
             "code_challenge_method": "plain"
         }
         
-        # Build the query string
-        query_string = "&".join([f"{k}={v}" for k, v in params.items()])
+        # Use requests.utils.quote to properly encode URL parameters
+        query_string = "&".join([f"{k}={requests.utils.quote(str(v))}" for k, v in params.items()])
         return f"{self.auth_url}?{query_string}"
     
     def handle_callback(self, code: str, state: str) -> bool:

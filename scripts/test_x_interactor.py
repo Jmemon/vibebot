@@ -9,6 +9,8 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import json
 
+from dotenv import load_dotenv
+
 # Add the src directory to the path so we can import modules
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -22,12 +24,14 @@ def main():
     """
     Test script to instantiate XInteractor and test its functionality.
     """
+    load_dotenv()
+
     try:
         # Get OAuth credentials from environment or config
-        client_id = os.environ.get("X_CLIENT_ID")
-        client_secret = os.environ.get("X_CLIENT_SECRET")
-        redirect_uri = os.environ.get("X_REDIRECT_URI", "https://localhost:3000/callback")
-        
+        client_id = os.environ.get("X_OAUTH2_CLIENT_ID")
+        client_secret = os.environ.get("X_OAUTH2_CLIENT_SECRET")
+        #redirect_uri = os.environ.get("X_REDIRECT_URI", "https://localhost:3000/callback")
+
         # Check if we have a saved token
         token_file = Path.home() / ".x_oauth_token.json"
         token = None
@@ -43,7 +47,7 @@ def main():
         x_interactor = XInteractor(
             client_id=client_id,
             client_secret=client_secret,
-            redirect_uri=redirect_uri,
+            #redirect_uri=redirect_uri,
             user_id=token.get('user_id') if token else None
         )
         

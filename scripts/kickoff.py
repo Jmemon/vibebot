@@ -82,6 +82,7 @@ def setup_x_interactor():
         # Get OAuth credentials from environment
         client_id = os.environ.get("X_OAUTH2_CLIENT_ID")
         client_secret = os.environ.get("X_OAUTH2_CLIENT_SECRET")
+        bearer_token = os.environ.get("X_BEARER_TOKEN")
         
         # Check if we have a saved token
         token_file = Path.home() / ".x_oauth_token.json"
@@ -98,6 +99,7 @@ def setup_x_interactor():
         x_interactor = XInteractor(
             client_id=client_id,
             client_secret=client_secret,
+            bearer_token=bearer_token,
             user_id=token.get('user_id') if token else None
         )
         
