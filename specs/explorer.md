@@ -179,7 +179,8 @@ CREATE scripts/test_tl_interface.py:
     Grab the timeline, don't reply to any tweets, but print out the tweets we should respond to.
     exit.
 ```
-1. Create a script to fake tune the model with the RL component.
+1. Create spin-up dataset
+1. Create a script to tune a dummy model with the RL component of the project.
 ```aider
 CREATE scripts/test_ppo.py:
     Initialize the bot with a test persona and handles to follow.
@@ -190,8 +191,8 @@ CREATE scripts/test_ppo.py:
 1. Build the initialization script.
 ```aider
 CREATE scripts/kickoff.py:
-    Initialize the bot with the given persona and handles to follow by initializing the BotManager using the config.
-    From the handles to follow, pull down posts from the X API to build an ad_hoc kick off dataset to train the model with SFT initially.
+    Initialize the bot with the given persona and handles to follow by initializing a VibeBot instance using the config.
+    From the handles to follow, pull down posts with the X API to build an ad_hoc kick off dataset to train the model with SFT initially.
     Kickoff the TL check/engagement metrics check every 15 minutes loop.
 ```
 1. Create docker compose file.
