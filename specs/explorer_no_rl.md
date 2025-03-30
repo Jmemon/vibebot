@@ -58,7 +58,7 @@ CREATE src/config.py
         ppo: PPOConfig  # the configuration for the contuous PPO training
         model: ModelConfig  # the configuration for the model
 ```
-1. Create initialization script to initialize all the databases with schemas given below.
+2. Create initialization script to initialize all the databases with schemas given below.
 ```aider
 CREATE scripts/init_dbs.sh:
     CREATE a psql command to create postgres dbs/bot_db.sql:
@@ -103,12 +103,12 @@ CREATE scripts/init_dbs.sh:
             time_of_reply: timestamp
         )
 ```
-1. Create dbs/readme.md.
+3. Create dbs/readme.md.
 ```aider
 CREATE dbs/readme.md:
     ADD structured description of each db with explanation for each column.
 ```
-1. Create db connectors with psycopg2 for each database.
+4. Create db connectors with psycopg2 for each database.
 ```aider
 CREATE src/connectors/bot_db.py:
     CREATE class BotDB that connects to the bot_db postgres db.
@@ -116,7 +116,7 @@ CREATE src/connectors/bot_db.py:
     CREATE class CommunityDB that connects to the community_db postgres db.
     CREATE class QuotesCommentsDB that connects to the quotes_comments_db postgres db.
 ```
-2. Build the X interaction class.
+5. Build the X interaction class.
 ```aider
 CREATE src/x_interactor.py:
     CREATE class XInteractor:
@@ -146,9 +146,7 @@ CREATE src/x_interactor.py:
             https://docs.x.com/x-api/posts/retrieve-posts-that-quote-a-post
             https://docs.x.com/x-api/users/returns-user-objects-that-have-liked-the-provided-post-id
 ```
-
-
-1. Create vibe bot class.
+6. Create vibe bot class.
 ```aider
 CREATE src/vibebot.py:
     CREATE class VibeBot:
@@ -188,14 +186,14 @@ CREATE src/vibebot.py:
             GET engagement metrics for each post in bot_db
             store engagement metrics in engagement_db using given row structure
 ```
-1.  Create a script to run the bot with some tests.
+7.  Create a script to run the bot with some tests.
 ```aider
 CREATE scripts/test_tl_interface.py:
     Initialize the bot with a test persona and handles to follow.
     Grab the timeline, don't reply to any tweets, but print out the tweets we should respond to.
     exit.
 ```
-1. Create a function that pulls down a dataset that we can use to jump start the vibebot's model with a LoRA SFT stage. As well as the training kickoff function.
+8. Create a function that pulls down a dataset that we can use to jump start the vibebot's model with a LoRA SFT stage. As well as the training kickoff function.
 ```aider
 CREATE src/data/jump_start.py
     CREATE def generate_jump_start_dataset(self, vibe_bot: VibeBot) -> None:
@@ -213,7 +211,7 @@ CREATE src/data/jump_start.py
         Use q_proj, k_proj, v_proj as the LoRA layers.
         Make sure to save the lora checkpoint in the checkpoints directory.
 ```
-1. Create a script to tune a dummy model with the RL component of the project.
+9. Create a script to tune a dummy model with the RL component of the project.
 ```aider
 CREATE scripts/test_ppo.py:
     Initialize the bot with a test persona and handles to follow.
@@ -221,7 +219,7 @@ CREATE scripts/test_ppo.py:
     Run PPO on the model with this fake dataset.
     Ensure it runs without errors, including saving the checkpointed model. VERIFY the checkpoint exists and the model can be successfully loaded from it, then delete this test checkpoint.
 ```
-1. Build the initialization script.
+10. Build the initialization script.
 ```aider
 CREATE scripts/kickoff.py:
     Initialize the bot with the given persona and handles to follow by initializing a VibeBot instance using the config.
@@ -229,7 +227,7 @@ CREATE scripts/kickoff.py:
     Run the model through a LoRA SFT stage with the spin-up dataset. Storing lora weights in checkpoints.
     Kickoff the loops for: TL interface, engagement metrics pull-down, and PPO training.
 ```
-1. Create docker compose file.
+11. Create docker compose file.
 ```aider
 CREATE docker-compose.yml:
     Run the db init script.
