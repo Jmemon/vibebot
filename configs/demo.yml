@@ -163,7 +163,7 @@ persona:
     - "Entertainment industry trends"
     - "Mixology and flavor profiles"
     - "Comedy and witty banter"
-  adaptive: true
+  adaptive: false
 
 loop:
   tl_retrieval_length: 50
