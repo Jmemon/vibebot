@@ -21,7 +21,7 @@ def generate_jump_start_dataset(vibebot: VibeBot) -> None:
     logger.info("Generating jump start dataset...")
     
     # Create directory for dataset
-    dataset_dir = Path("data/jump_start_files")
+    dataset_dir = Path("src/data/jump_start_files")
     dataset_dir.mkdir(parents=True, exist_ok=True)
     
     # Get all users from community DB
@@ -127,7 +127,7 @@ def jump_start_training(vibebot: VibeBot) -> None:
     dataset_dir = Path("data/jump_start_files")
     if not dataset_dir.exists() or not any(dataset_dir.iterdir()):
         logger.error("Jump start dataset not found. Run generate_jump_start_dataset first.")
-        return
+        raise FileNotFoundError("Jump start dataset not found. Run generate_jump_start_dataset first.")
     
     # Load dataset
     dataset_files = list(dataset_dir.glob("*.json"))
