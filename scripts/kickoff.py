@@ -208,8 +208,9 @@ def main():
             generate_jump_start_dataset(vibebot)
             logger.info("Starting initial SFT training...")
             jump_start_training(vibebot)
+        logger.info("SFT training completed.")
     
-    # Start the loops in separate threads
+    # Start the loops in separate threads only after SFT is complete
     logger.info("Starting main loops...")
     
     tl_thread = threading.Thread(
