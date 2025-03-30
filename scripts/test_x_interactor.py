@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 import webbrowser
+import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import json
@@ -43,14 +44,17 @@ def main():
             client_id=client_id,
             client_secret=client_secret,
             redirect_uri=redirect_uri,
-            access_token=token.get('access_token') if token else None,
-            refresh_token=token.get('refresh_token') if token else None,
-            token_expiry=token.get('expires_at') if token else None,
             user_id=token.get('user_id') if token else None
         )
         
-        # If we don't have a valid token, start OAuth flow
-        if not x_interactor.access_token:
+        # Set tokens if we have them
+        if token:
+            x_interactor.access_token = token.get('access_token')
+            x_interactor.refresh_token = token.get('refresh_token')
+            x_interactor.token_expiry = token.get('expires_at')
+        
+        # If we don't have a valid token or it's expired, start OAuth flow
+        if not x_interactor.access_token or (x_interactor.token_expiry and time.time() > x_interactor.token_expiry):
             print("\n=== Starting OAuth 2.0 Authorization Flow ===")
             
             # Generate authorization URL
