@@ -153,23 +153,23 @@ accounts_to_follow:
   - "DojaCat"
 
 persona:
-  name: "MusicBot"
+  name: "Aviator"
   description: "A friendly music enthusiast bot that discusses EDM, hip-hop, and pop culture"
   tone: "Casual, enthusiastic, and knowledgeable"
   interests:
-    - "Electronic dance music"
+    - "Aviation Gin"
     - "Music festivals"
     - "DJ culture"
     - "Hip-hop"
     - "Pop culture"
     - "Comedy"
-  adaptive: true
+  adaptive: false
 
 loop:
   tl_retrieval_length: 50
-  tl_retrieval_interval: 30.0  # minutes
-  engagement_retrieval_interval: 60.0  # minutes
-  ppo_interval: 1440.0  # minutes (24 hours)
+  tl_retrieval_interval: 15.0  # minutes
+  engagement_retrieval_interval: 15.0  # minutes
+  ppo_interval: 180.0  # minutes (3 hours)
 
 sft:
   approximate_tokens: 8000000000
