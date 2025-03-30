@@ -43,15 +43,18 @@ def main():
             client_id=client_id,
             client_secret=client_secret,
             redirect_uri=redirect_uri,
-            token=token
+            access_token=token.get('access_token') if token else None,
+            refresh_token=token.get('refresh_token') if token else None,
+            token_expiry=token.get('expires_at') if token else None,
+            user_id=token.get('user_id') if token else None
         )
         
         # If we don't have a valid token, start OAuth flow
-        if not token:
+        if not x_interactor.access_token:
             print("\n=== Starting OAuth 2.0 Authorization Flow ===")
             
             # Generate authorization URL
-            auth_url = x_interactor.authenticate()
+            auth_url = x_interactor.get_authorization_url()
             print(f"\nAuthorization URL generated: {auth_url}")
             
             # Open the browser for the user to authorize
@@ -63,16 +66,39 @@ def main():
             print("Please copy and paste the full redirect URL here:")
             redirect_url = input("> ")
             
+            # Parse the redirect URL to get the code and state
+            parsed_url = urlparse(redirect_url)
+            query_params = parse_qs(parsed_url.query)
+            
+            if 'code' not in query_params or 'state' not in query_params:
+                print("Error: The redirect URL doesn't contain the required parameters.")
+                return
+            
+            code = query_params['code'][0]
+            state = query_params['state'][0]
+            
             # Exchange the code for tokens
             print("\nExchanging code for tokens...")
-            token = x_interactor.fetch_token(redirect_url)
+            success = x_interactor.handle_callback(code, state)
             
-            print("Token exchange successful!")
-            
-            # Save the token for future use
-            with open(token_file, 'w') as f:
-                json.dump(token, f)
-            print(f"Token saved to {token_file}")
+            if success:
+                print("Token exchange successful!")
+                
+                # Create token dict to save
+                token = {
+                    'access_token': x_interactor.access_token,
+                    'refresh_token': x_interactor.refresh_token,
+                    'expires_at': x_interactor.token_expiry,
+                    'user_id': x_interactor.user_id
+                }
+                
+                # Save the token for future use
+                with open(token_file, 'w') as f:
+                    json.dump(token, f)
+                print(f"Token saved to {token_file}")
+            else:
+                print("Token exchange failed!")
+                return
         
         # Print user ID
         print(f"\nAuthenticated user ID: {x_interactor.user_id}")
@@ -135,12 +161,21 @@ def main():
         choice = input("> ").strip().lower()
         if choice == 'y':
             print("Refreshing token...")
-            refreshed_token = x_interactor.refresh_token()
-            if refreshed_token:
+            success = x_interactor._refresh_access_token()
+            if success:
                 print("Token refreshed successfully!")
+                
+                # Create updated token dict to save
+                updated_token = {
+                    'access_token': x_interactor.access_token,
+                    'refresh_token': x_interactor.refresh_token,
+                    'expires_at': x_interactor.token_expiry,
+                    'user_id': x_interactor.user_id
+                }
+                
                 # Save the refreshed token
                 with open(token_file, 'w') as f:
-                    json.dump(refreshed_token, f)
+                    json.dump(updated_token, f)
                 print(f"Refreshed token saved to {token_file}")
             else:
                 print("Failed to refresh token.")
