@@ -1,48 +1,124 @@
-import os
-import requests
 import logging
-from typing import List, Dict, Any, Optional
-from dotenv import load_dotenv
+import time
+from typing import Dict, List, Optional, Any
+import requests
+from requests_oauthlib import OAuth2Session
 
 logger = logging.getLogger(__name__)
 
 class Tweet:
     def __init__(self, tweet_id: str, author_id: str, text: str, created_at: str, 
-                 referenced_tweets: Optional[List[Dict[str, str]]] = None):
+                referenced_tweets: Optional[List[Dict[str, str]]] = None):
         self.id = tweet_id
         self.author_id = author_id
         self.text = text
         self.created_at = created_at
         self.referenced_tweets = referenced_tweets or []
+    
+    def __repr__(self):
+        return f"Tweet(id={self.id}, author_id={self.author_id}, text='{self.text[:30]}...')"
+
 
 class XInteractor:
-    def __init__(self, user_id: str):
-        """Initialize the X API interactor.
+    """Class to interact with the X (Twitter) API using OAuth 2.0."""
+    
+    def __init__(self, client_id: str, client_secret: str, redirect_uri: str, 
+                 token: Optional[Dict[str, Any]] = None):
+        """Initialize an OAuth2 session to be used for X API interactions.
         
         Args:
-            user_id: The user ID of the bot account
+            client_id: OAuth2 client ID
+            client_secret: OAuth2 client secret
+            redirect_uri: OAuth2 redirect URI
+            token: Existing OAuth2 token (if available)
         """
-        # Load API keys from .env file
-        load_dotenv()
-        self.api_key = os.getenv("X_API_KEY")
-        self.api_key_secret = os.getenv("X_API_KEY_SECRET")
-        self.access_token = os.getenv("X_ACCESS_TOKEN")
-        self.access_token_secret = os.getenv("X_ACCESS_TOKEN_SECRET")
-        self.bearer_token = os.getenv("X_BEARER_TOKEN")
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.redirect_uri = redirect_uri
+        self.token = token
         
-        if not all([self.api_key, self.api_key_secret, self.access_token, 
-                   self.access_token_secret, self.bearer_token]):
-            raise ValueError("Missing X API credentials in .env file")
-        
-        self.user_id = user_id
+        # X API endpoints
         self.base_url = "https://api.twitter.com/2"
         
-    def _get_headers(self) -> Dict[str, str]:
-        """Get the authorization headers for X API requests."""
-        return {
-            "Authorization": f"Bearer {self.bearer_token}",
-            "Content-Type": "application/json"
-        }
+        # Initialize OAuth2 session
+        self.session = self._create_oauth_session()
+        
+        # Store bot's user ID after authentication
+        self.user_id = self._get_my_user_id() if self.token else None
+        
+        logger.info(f"XInteractor initialized with user_id: {self.user_id}")
+    
+    def _create_oauth_session(self) -> OAuth2Session:
+        """Create and return an OAuth2 session."""
+        scope = ["tweet.read", "tweet.write", "users.read", "follows.write"]
+        
+        session = OAuth2Session(
+            client_id=self.client_id,
+            redirect_uri=self.redirect_uri,
+            scope=scope,
+            token=self.token
+        )
+        
+        return session
+    
+    def authenticate(self) -> str:
+        """Start the OAuth2 authentication flow.
+        
+        Returns:
+            The authorization URL to redirect the user to
+        """
+        auth_url, _ = self.session.authorization_url(
+            "https://twitter.com/i/oauth2/authorize",
+            code_challenge_method="S256"
+        )
+        return auth_url
+    
+    def fetch_token(self, authorization_response: str) -> Dict[str, Any]:
+        """Complete the OAuth2 authentication flow.
+        
+        Args:
+            authorization_response: The full callback URL after user authorization
+            
+        Returns:
+            The OAuth2 token
+        """
+        self.token = self.session.fetch_token(
+            "https://api.twitter.com/2/oauth2/token",
+            authorization_response=authorization_response,
+            client_secret=self.client_secret
+        )
+        
+        # Update user_id after successful authentication
+        self.user_id = self._get_my_user_id()
+        
+        return self.token
+    
+    def refresh_token(self) -> Dict[str, Any]:
+        """Refresh the OAuth2 token.
+        
+        Returns:
+            The refreshed OAuth2 token
+        """
+        self.token = self.session.refresh_token(
+            "https://api.twitter.com/2/oauth2/token",
+            client_id=self.client_id,
+            client_secret=self.client_secret
+        )
+        return self.token
+    
+    def _get_my_user_id(self) -> Optional[str]:
+        """Get the authenticated user's ID.
+        
+        Returns:
+            The user ID if successful, None otherwise
+        """
+        try:
+            response = self.session.get(f"{self.base_url}/users/me")
+            response.raise_for_status()
+            return response.json()["data"]["id"]
+        except Exception as e:
+            logger.error(f"Failed to get user ID: {e}")
+            return None
     
     def get_timeline(self, user_id: str = None, max_tweets: int = 50) -> List[Tweet]:
         """Get the timeline for a user.
@@ -50,40 +126,47 @@ class XInteractor:
         Args:
             user_id: The user ID to get the timeline for (defaults to bot's user_id)
             max_tweets: Maximum number of tweets to retrieve
-            
+                
         Returns:
             List of Tweet objects
         """
-        if user_id is None:
+        if not user_id:
             user_id = self.user_id
             
-        url = f"{self.base_url}/users/{user_id}/timelines/reverse_chronological"
-        params = {
-            "max_results": max_tweets,
-            "tweet.fields": "created_at,author_id,referenced_tweets",
-            "expansions": "referenced_tweets.id"
-        }
+        if not user_id:
+            logger.error("No user ID provided and no authenticated user ID available")
+            return []
         
         try:
-            response = requests.get(url, headers=self._get_headers(), params=params)
-            response.raise_for_status()
-            data = response.json()
+            params = {
+                "max_results": min(max_tweets, 100),  # API limit is 100
+                "tweet.fields": "created_at,referenced_tweets",
+                "expansions": "author_id"
+            }
             
+            response = self.session.get(
+                f"{self.base_url}/users/{user_id}/timelines/reverse_chronological",
+                params=params
+            )
+            response.raise_for_status()
+            
+            data = response.json()
             tweets = []
-            if "data" in data:
-                for tweet_data in data["data"]:
-                    tweet = Tweet(
-                        tweet_id=tweet_data["id"],
-                        author_id=tweet_data["author_id"],
-                        text=tweet_data["text"],
-                        created_at=tweet_data["created_at"],
-                        referenced_tweets=tweet_data.get("referenced_tweets")
-                    )
-                    tweets.append(tweet)
+            
+            for tweet_data in data.get("data", []):
+                tweet = Tweet(
+                    tweet_id=tweet_data["id"],
+                    author_id=tweet_data["author_id"],
+                    text=tweet_data["text"],
+                    created_at=tweet_data["created_at"],
+                    referenced_tweets=tweet_data.get("referenced_tweets")
+                )
+                tweets.append(tweet)
             
             return tweets
+        
         except Exception as e:
-            logger.error(f"Error getting timeline: {e}")
+            logger.error(f"Failed to get timeline: {e}")
             return []
     
     def post_tweet(self, tweet: str) -> Optional[str]:
@@ -91,22 +174,21 @@ class XInteractor:
         
         Args:
             tweet: The content of the tweet
-            
+                
         Returns:
             The ID of the posted tweet if successful, None otherwise
         """
-        url = f"{self.base_url}/tweets"
-        payload = {
-            "text": tweet
-        }
-        
         try:
-            response = requests.post(url, headers=self._get_headers(), json=payload)
+            payload = {"text": tweet}
+            response = self.session.post(f"{self.base_url}/tweets", json=payload)
             response.raise_for_status()
-            data = response.json()
-            return data["data"]["id"]
+            
+            tweet_id = response.json()["data"]["id"]
+            logger.info(f"Posted tweet with ID: {tweet_id}")
+            return tweet_id
+        
         except Exception as e:
-            logger.error(f"Error posting tweet: {e}")
+            logger.error(f"Failed to post tweet: {e}")
             return None
     
     def reply_to_tweet(self, tweet_id: str, reply: str) -> Optional[str]:
@@ -115,25 +197,27 @@ class XInteractor:
         Args:
             tweet_id: The ID of the tweet to reply to
             reply: The content of the reply
-            
+                
         Returns:
             The ID of the reply tweet if successful, None otherwise
         """
-        url = f"{self.base_url}/tweets"
-        payload = {
-            "text": reply,
-            "reply": {
-                "in_reply_to_tweet_id": tweet_id
-            }
-        }
-        
         try:
-            response = requests.post(url, headers=self._get_headers(), json=payload)
+            payload = {
+                "text": reply,
+                "reply": {
+                    "in_reply_to_tweet_id": tweet_id
+                }
+            }
+            
+            response = self.session.post(f"{self.base_url}/tweets", json=payload)
             response.raise_for_status()
-            data = response.json()
-            return data["data"]["id"]
+            
+            reply_id = response.json()["data"]["id"]
+            logger.info(f"Posted reply with ID: {reply_id} to tweet: {tweet_id}")
+            return reply_id
+        
         except Exception as e:
-            logger.error(f"Error replying to tweet: {e}")
+            logger.error(f"Failed to reply to tweet: {e}")
             return None
     
     def quote_tweet(self, tweet_id: str, quote: str) -> Optional[str]:
@@ -142,23 +226,25 @@ class XInteractor:
         Args:
             tweet_id: The ID of the tweet to quote
             quote: The content of the quote
-            
+                
         Returns:
             The ID of the quote tweet if successful, None otherwise
         """
-        url = f"{self.base_url}/tweets"
-        payload = {
-            "text": quote,
-            "quote_tweet_id": tweet_id
-        }
-        
         try:
-            response = requests.post(url, headers=self._get_headers(), json=payload)
+            # For quoting, we need to include the tweet URL in the text
+            tweet_url = f"https://twitter.com/x/status/{tweet_id}"
+            full_quote = f"{quote} {tweet_url}"
+            
+            payload = {"text": full_quote}
+            response = self.session.post(f"{self.base_url}/tweets", json=payload)
             response.raise_for_status()
-            data = response.json()
-            return data["data"]["id"]
+            
+            quote_id = response.json()["data"]["id"]
+            logger.info(f"Posted quote with ID: {quote_id} for tweet: {tweet_id}")
+            return quote_id
+        
         except Exception as e:
-            logger.error(f"Error quoting tweet: {e}")
+            logger.error(f"Failed to quote tweet: {e}")
             return None
     
     def get_engagement_metrics(self, tweet_id: str) -> Dict[str, Any]:
@@ -166,111 +252,95 @@ class XInteractor:
         
         Args:
             tweet_id: The ID of the tweet to get metrics for
-            
+                
         Returns:
             Dictionary containing engagement metrics
         """
-        metrics = {
-            "likes": 0,
-            "retweets": 0,
-            "quotes": [],
-            "comments": []
-        }
-        
-        # Get likes
         try:
-            likes_url = f"{self.base_url}/tweets/{tweet_id}/liking_users"
-            likes_response = requests.get(likes_url, headers=self._get_headers())
-            likes_response.raise_for_status()
-            likes_data = likes_response.json()
-            metrics["likes"] = len(likes_data.get("data", []))
-        except Exception as e:
-            logger.error(f"Error getting likes: {e}")
-        
-        # Get retweets
-        try:
-            retweets_url = f"{self.base_url}/tweets/{tweet_id}/retweeted_by"
-            retweets_response = requests.get(retweets_url, headers=self._get_headers())
-            retweets_response.raise_for_status()
-            retweets_data = retweets_response.json()
-            metrics["retweets"] = len(retweets_data.get("data", []))
-        except Exception as e:
-            logger.error(f"Error getting retweets: {e}")
-        
-        # Get quotes
-        try:
-            quotes_url = f"{self.base_url}/tweets/search/recent"
-            quotes_params = {
-                "query": f"url:{tweet_id}",
-                "tweet.fields": "author_id,created_at,text"
+            params = {
+                "tweet.fields": "public_metrics,non_public_metrics,organic_metrics"
             }
-            quotes_response = requests.get(quotes_url, headers=self._get_headers(), params=quotes_params)
-            quotes_response.raise_for_status()
-            quotes_data = quotes_response.json()
-            metrics["quotes"] = quotes_data.get("data", [])
-        except Exception as e:
-            logger.error(f"Error getting quotes: {e}")
-        
-        # Get comments (replies)
-        try:
-            comments_url = f"{self.base_url}/tweets/search/recent"
-            comments_params = {
-                "query": f"conversation_id:{tweet_id}",
-                "tweet.fields": "author_id,created_at,text,in_reply_to_user_id"
-            }
-            comments_response = requests.get(comments_url, headers=self._get_headers(), params=comments_params)
-            comments_response.raise_for_status()
-            comments_data = comments_response.json()
             
-            # Filter to only include direct replies to the tweet
-            metrics["comments"] = [
-                comment for comment in comments_data.get("data", [])
-                if comment.get("in_reply_to_user_id") == self.user_id
-            ]
-        except Exception as e:
-            logger.error(f"Error getting comments: {e}")
+            response = self.session.get(
+                f"{self.base_url}/tweets/{tweet_id}",
+                params=params
+            )
+            response.raise_for_status()
+            
+            tweet_data = response.json()["data"]
+            
+            # Extract all available metrics
+            metrics = {}
+            
+            # Public metrics are always available
+            if "public_metrics" in tweet_data:
+                metrics.update(tweet_data["public_metrics"])
+            
+            # These metrics are only available to the tweet author
+            for metric_type in ["non_public_metrics", "organic_metrics"]:
+                if metric_type in tweet_data:
+                    metrics.update(tweet_data[metric_type])
+            
+            return metrics
         
-        return metrics
+        except Exception as e:
+            logger.error(f"Failed to get engagement metrics: {e}")
+            return {}
     
     def follow_user(self, target_user_id: str) -> bool:
-        """Follow a user.
+        """Follow a user using OAuth 2.0.
         
         Args:
             target_user_id: The ID of the user to follow
-            
+                
         Returns:
             True if successful, False otherwise
         """
-        url = f"{self.base_url}/users/{self.user_id}/following"
-        payload = {
-            "target_user_id": target_user_id
-        }
+        if not self.user_id:
+            logger.error("No authenticated user ID available")
+            return False
         
         try:
-            response = requests.post(url, headers=self._get_headers(), json=payload)
+            payload = {"target_user_id": target_user_id}
+            response = self.session.post(
+                f"{self.base_url}/users/{self.user_id}/following",
+                json=payload
+            )
             response.raise_for_status()
-            return True
+            
+            result = response.json()["data"]["following"]
+            logger.info(f"Follow user {target_user_id} result: {result}")
+            return result
+        
         except Exception as e:
-            logger.error(f"Error following user: {e}")
+            logger.error(f"Failed to follow user: {e}")
             return False
     
     def unfollow_user(self, target_user_id: str) -> bool:
-        """Unfollow a user.
+        """Unfollow a user using OAuth 2.0.
         
         Args:
             target_user_id: The ID of the user to unfollow
-            
+                
         Returns:
             True if successful, False otherwise
         """
-        url = f"{self.base_url}/users/{self.user_id}/following/{target_user_id}"
+        if not self.user_id:
+            logger.error("No authenticated user ID available")
+            return False
         
         try:
-            response = requests.delete(url, headers=self._get_headers())
+            response = self.session.delete(
+                f"{self.base_url}/users/{self.user_id}/following/{target_user_id}"
+            )
             response.raise_for_status()
-            return True
+            
+            result = not response.json()["data"]["following"]
+            logger.info(f"Unfollow user {target_user_id} result: {result}")
+            return result
+        
         except Exception as e:
-            logger.error(f"Error unfollowing user: {e}")
+            logger.error(f"Failed to unfollow user: {e}")
             return False
     
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
@@ -278,20 +348,27 @@ class XInteractor:
         
         Args:
             username: The username to look up
-            
+                
         Returns:
             Dictionary containing user information if successful, None otherwise
         """
-        url = f"{self.base_url}/users/by/username/{username}"
-        params = {
-            "user.fields": "id,name,username,description,location,public_metrics"
-        }
-        
         try:
-            response = requests.get(url, headers=self._get_headers(), params=params)
+            # Remove @ symbol if present
+            if username.startswith('@'):
+                username = username[1:]
+                
+            params = {
+                "user.fields": "id,name,username,description,public_metrics"
+            }
+            
+            response = self.session.get(
+                f"{self.base_url}/users/by/username/{username}",
+                params=params
+            )
             response.raise_for_status()
-            data = response.json()
-            return data.get("data")
+            
+            return response.json()["data"]
+        
         except Exception as e:
-            logger.error(f"Error getting user by username: {e}")
+            logger.error(f"Failed to get user by username: {e}")
             return None
