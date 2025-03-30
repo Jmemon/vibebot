@@ -84,11 +84,14 @@ def main():
     
     # Generate jump start dataset and train the model with SFT if not skipped
     if not args.skip_sft:
-        logger.info("Generating jump start dataset...")
-        generate_jump_start_dataset(vibebot)
-        
-        logger.info("Starting initial SFT training...")
-        jump_start_training(vibebot)
+        try:
+            logger.info("Starting initial SFT training...")
+            jump_start_training(vibebot)
+        except FileNotFoundError:
+            logger.info("Jump start dataset not found. Generating it...")
+            generate_jump_start_dataset(vibebot)
+            logger.info("Starting initial SFT training...")
+            jump_start_training(vibebot)
     
     # Start the loops in separate threads
     logger.info("Starting main loops...")
