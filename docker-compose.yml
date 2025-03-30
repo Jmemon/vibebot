@@ -1,0 +1,59 @@
+version: '3'
+
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vibebot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  init_dbs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: vibebot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["./scripts/init_dbs.sh"]
+
+  vibebot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: vibebot
+      X_API_KEY: ${X_API_KEY}
+      X_API_KEY_SECRET: ${X_API_KEY_SECRET}
+      X_ACCESS_TOKEN: ${X_ACCESS_TOKEN}
+      X_ACCESS_TOKEN_SECRET: ${X_ACCESS_TOKEN_SECRET}
+      X_BEARER_TOKEN: ${X_BEARER_TOKEN}
+    volumes:
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints
+    depends_on:
+      init_dbs:
+        condition: service_completed_successfully
+    command: ["python", "scripts/kickoff.py", "--config", "configs/demo.yml"]
+
+volumes:
+  postgres_data:
