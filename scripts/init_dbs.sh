@@ -45,7 +45,7 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -tc "SELECT 1 F
 echo "Creating bot_db table..."
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS bot_db (
-    post_id UUID PRIMARY KEY,
+    post_id TEXT PRIMARY KEY,
     content_gen_prompt TEXT,
     content TEXT,
     is_reply BOOLEAN,
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS bot_db (
 echo "Creating engagement_db table..."
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS engagement_db (
-    post_id UUID PRIMARY KEY,
+    post_id TEXT PRIMARY KEY,
     retrieval_time TIMESTAMP,
     likes INTEGER,
     retweets INTEGER,
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS engagement_db (
 echo "Creating community_db table..."
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS community_db (
-    user_id UUID PRIMARY KEY,
+    user_id TEXT PRIMARY KEY,
     handle TEXT,
     followers INTEGER,
     following INTEGER,
@@ -81,8 +81,8 @@ CREATE TABLE IF NOT EXISTS community_db (
 echo "Creating quotes_comments_db table..."
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "
 CREATE TABLE IF NOT EXISTS quotes_comments_db (
-    post_id UUID PRIMARY KEY,
-    reply_id UUID,
+    post_id TEXT PRIMARY KEY,
+    reply_id TEXT,
     comment BOOLEAN,
     time_of_reply TIMESTAMP
 );"
