@@ -3,7 +3,7 @@ import json
 import logging
 import math
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import torch
 from transformers import Trainer, TrainingArguments
 from peft import LoraConfig, get_peft_model
@@ -46,6 +46,9 @@ def generate_jump_start_dataset(vibebot: VibeBot) -> None:
     # Store tweets in a list until we're ready to write to a file
     current_file_tweets = []
     
+    # Create a dictionary to track the oldest tweet ID we've seen for each user
+    user_oldest_tweets = {}
+    
     # Round-robin through users to get tweets
     user_index = 0
     memory_limit = 4 * 1024 * 1024 * 1024  # 4GB memory limit
@@ -54,10 +57,21 @@ def generate_jump_start_dataset(vibebot: VibeBot) -> None:
     while total_chars < approximate_chars and memory_usage < memory_limit:
         user = users[user_index]
         user_index = (user_index + 1) % len(users)
+        user_id = user["user_id"]
         
         try:
-            # Get specific posts from user's profile
-            user_posts = vibebot.x_interactor.get_user_posts(user_id=user["user_id"], max_posts=50)
+            # Get specific posts from user's profile, using the oldest tweet ID we've seen
+            # to paginate and avoid getting the same tweets again
+            oldest_id = user_oldest_tweets.get(user_id)
+            user_posts, new_oldest_id = vibebot.x_interactor.get_user_posts(
+                user_id=user_id, 
+                max_posts=50,
+                until_id=oldest_id
+            )
+            
+            # Update the oldest tweet ID for this user
+            if new_oldest_id:
+                user_oldest_tweets[user_id] = new_oldest_id
             
             for tweet in user_posts:
                 tweet_data = {
@@ -96,7 +110,11 @@ def generate_jump_start_dataset(vibebot: VibeBot) -> None:
                 if total_chars >= approximate_chars or memory_usage >= memory_limit:
                     break
             
-            logger.info(f"Downloaded {len(user_posts)} posts from user {user['handle']}")
+            logger.info(f"Downloaded {len(user_posts)} posts from user {user['handle']} (oldest_id: {new_oldest_id})")
+            
+            # If we didn't get any new posts, skip this user next time
+            if not user_posts:
+                logger.info(f"No more posts available for user {user['handle']}")
             
             # Check if we've reached our limits
             if total_chars >= approximate_chars or memory_usage >= memory_limit:

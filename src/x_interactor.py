@@ -480,19 +480,20 @@ class XInteractor:
             logger.error(f"Error getting timeline: {e}")
             return []
     
-    def get_user_posts(self, user_id: str, max_posts: int = 50) -> List[Tweet]:
+    def get_user_posts(self, user_id: str, max_posts: int = 50, until_id: Optional[str] = None) -> Tuple[List[Tweet], Optional[str]]:
         """Get specific posts from a user's profile.
         
         Args:
             user_id: The user ID to get posts for
             max_posts: Maximum number of posts to retrieve
+            until_id: Only return tweets older than this tweet ID (for pagination)
             
         Returns:
-            List of Tweet objects
+            Tuple containing (list of Tweet objects, oldest_id for pagination)
         """
         if not user_id:
             logger.error("No user ID provided")
-            return []
+            return [], None
         
         try:
             params = {
@@ -501,17 +502,23 @@ class XInteractor:
                 "exclude": "retweets,replies"  # Only get original posts
             }
             
+            # Add until_id parameter if provided (for pagination)
+            if until_id:
+                params["until_id"] = until_id
+            
             endpoint = f"/users/{user_id}/tweets"
             response = self._make_authenticated_request("GET", endpoint, params=params)
             
             if not response or response.status_code != 200:
                 logger.error(f"Failed to get user posts: {response.status_code if response else 'No response'}")
-                return []
+                return [], None
             
             data = response.json()
             tweets_data = data.get("data", [])
             
             tweets = []
+            oldest_id = None
+            
             for tweet_data in tweets_data:
                 tweet = Tweet(
                     tweet_id=tweet_data.get("id"),
@@ -521,11 +528,15 @@ class XInteractor:
                     referenced_tweets=tweet_data.get("referenced_tweets", [])
                 )
                 tweets.append(tweet)
+                
+                # Track the oldest tweet ID for pagination
+                if oldest_id is None or int(tweet_data.get("id")) < int(oldest_id):
+                    oldest_id = tweet_data.get("id")
             
-            return tweets
+            return tweets, oldest_id
         except Exception as e:
             logger.error(f"Error getting user posts: {e}")
-            return []
+            return [], None
     
     def post_tweet(self, tweet: str) -> Optional[str]:
         """Post a tweet.
