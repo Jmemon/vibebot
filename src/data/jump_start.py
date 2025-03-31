@@ -41,7 +41,7 @@ def generate_jump_start_dataset(vibebot: VibeBot) -> None:
     total_chars = 0
     file_chars = 0
     file_index = 0
-    max_file_size = 500 * 1024 * 1024  # 500MB per file
+    max_file_size = 50 * 1024 * 1024  # 50MB per file
     
     # Store tweets in a list until we're ready to write to a file
     current_file_tweets = []
